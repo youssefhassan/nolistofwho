@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Share image, square</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1080px; height: 1080px; box-sizing: border-box; background: #000000; color: #ffffff; font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; padding: 64px; display: flex; flex-direction: column; gap: 36px">
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; font-size: 32px; letter-spacing: 0.14em; text-transform: uppercase">
+<span>The Attention Strike</span>
+<span style="color: #3ddc84">Fri 27 Nov 2026</span>
+</div>
+
+<div style="flex: 1; min-height: 0; background-color: #000000; background-image: radial-gradient(circle, #ffffff 5px, transparent 6px); background-size: 34px 34px; background-position: 0 0" role="img" aria-label="A field of identical dots: many people, none of them named"></div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<sc-if value="{{isIn}}" hint-placeholder-val="{{false}}">
+<div style="font-weight: 800; font-size: 190px; line-height: 0.86; text-transform: uppercase; letter-spacing: -0.01em">I'm in.</div>
+</sc-if>
+<sc-if value="{{isDid}}" hint-placeholder-val="{{true}}">
+<div style="font-weight: 800; font-size: 190px; line-height: 0.86; text-transform: uppercase; letter-spacing: -0.01em">I logged off.</div>
+</sc-if>
+<div style="font-weight: 800; font-size: 150px; line-height: 0.9; text-transform: uppercase; letter-spacing: -0.01em; color: #3ddc84">One of 4,312.</div>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; border-top: 6px solid #ffffff; padding-top: 22px; font-weight: 700; font-size: 32px; letter-spacing: 0.08em; text-transform: uppercase">
+<span>Don't feed the billionaire</span>
+<span style="color: #3ddc84; text-transform: none">nolistofwho.org</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"line":{"editor":"enum","options":["I logged off","I am in"],"default":"I logged off"},"$preview":{"width":1080,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+const l = this.props.line ?? 'I logged off';
+return { isDid: l === 'I logged off', isIn: l !== 'I logged off' };
+}
+}
+</script>
+</body>
+</html>

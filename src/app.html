@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="text-scale" content="scale" />
+		<script nonce="%sveltekit.nonce%">
+			// The look: dark, or bright (the 90s one). Your choice stays on this device; nothing is sent.
+			try {
+				var t = localStorage.getItem('theme');
+				if (t !== 'dark' && t !== 'bright') t = matchMedia('(prefers-color-scheme: light)').matches ? 'bright' : 'dark';
+				document.documentElement.dataset.theme = t;
+			} catch (e) {}
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

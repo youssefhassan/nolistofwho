@@ -1,0 +1,126 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-16T09:30:00Z"
+  },
+  "title": "The Counter",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Home.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 1900,
+      "title": "1 \u00b7 All actions, by company"
+    },
+    "Main.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 2080,
+      "title": "2 \u00b7 The action page"
+    },
+    "Join.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 1560,
+      "title": "3 \u00b7 Make your ticket"
+    },
+    "Receipt.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 1780,
+      "title": "4 \u00b7 Counted: the receipt"
+    },
+    "Share.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 1080,
+      "h": 1080,
+      "title": "5 \u00b7 Share image, square"
+    },
+    "Roadmap.dc.html": {
+      "x": 0,
+      "y": 2560,
+      "w": 1680,
+      "h": 1020,
+      "title": "MVP and five milestones"
+    },
+    "Home90s.dc.html": {
+      "x": 0,
+      "y": 4000,
+      "w": 390,
+      "h": 1560,
+      "title": "90s \u00b7 All actions"
+    },
+    "Main90s.dc.html": {
+      "x": 470,
+      "y": 4000,
+      "w": 390,
+      "h": 1900,
+      "title": "90s \u00b7 The action page"
+    },
+    "Join90s.dc.html": {
+      "x": 940,
+      "y": 4000,
+      "w": 390,
+      "h": 1420,
+      "title": "90s \u00b7 Make your ticket"
+    }
+  },
+  "order": [
+    "Home.dc.html",
+    "Main.dc.html",
+    "Join.dc.html",
+    "Receipt.dc.html",
+    "Share.dc.html",
+    "Roadmap.dc.html",
+    "Home90s.dc.html",
+    "Main90s.dc.html",
+    "Join90s.dc.html"
+  ],
+  "notes": {
+    "t-mvp": {
+      "x": 0,
+      "y": -300,
+      "text": "MVP \u00b7 live Wed Nov 25",
+      "kind": "title1",
+      "maxW": 2960
+    },
+    "t-road": {
+      "x": 0,
+      "y": 2260,
+      "text": "After the MVP",
+      "kind": "title1",
+      "maxW": 1680
+    },
+    "n-sample": {
+      "x": 3040,
+      "y": 0,
+      "w": 320,
+      "text": "All numbers on these screens are samples, to show the layout. Brackets like [HOST] are decisions still open. The font is a stand-in: the real site serves its own font and loads nothing from Google.",
+      "fill": "green"
+    },
+    "t-90s": {
+      "x": 0,
+      "y": 3700,
+      "text": "Direction B \u00b7 before big tech",
+      "kind": "title1",
+      "maxW": 1330
+    },
+    "n-90s": {
+      "x": 1410,
+      "y": 4000,
+      "w": 320,
+      "text": "Direction B uses only fonts every computer already has (Times, Courier, Verdana). The page downloads no font at all. The number is a hit counter, like the ones on 90s home pages.",
+      "fill": "green"
+    }
+  },
+  "designSystems": []
+}
