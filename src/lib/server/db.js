@@ -13,6 +13,8 @@ if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
 
 export const db = new DatabaseSync(path);
 db.exec('PRAGMA journal_mode = WAL;');
+// Deleted rows are overwritten with zeros, not left in the file's free space.
+db.exec('PRAGMA secure_delete = ON;');
 checkStage(db, stage);
 
 const pretend = pretendToday(stage);
@@ -34,5 +36,6 @@ export const guard = createGuard({
 export const pause = createPause({
 	file: path === ':memory:' ? null : dirname(path) + '/PAUSE',
 	perMinute: Number(process.env.COUNTER_PAUSE_PER_MINUTE ?? 300),
+	perHour: Number(process.env.COUNTER_PAUSE_PER_HOUR ?? 3000),
 	holdMinutes: Number(process.env.COUNTER_PAUSE_MINUTES ?? 15)
 });

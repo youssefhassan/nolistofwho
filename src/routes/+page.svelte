@@ -1,10 +1,12 @@
 <script>
 	import { niceDate, n, weekday } from '#lib/format.js';
+	import Words from '#lib/Words.svelte';
 	let { data } = $props();
 </script>
 
 <svelte:head><title>The Counter</title></svelte:head>
 
+<div class="homehead">
 <section class="intro">
 	<h1>Many people.<br />One action.<br /><span class="g">No list of who.</span></h1>
 	<p class="maker">There are many sporadic efforts to put pressure on social media and the tech oligarchs: shutdowns, strikes, the exodus. So I built a counter that takes no data from you. We can measure the force we have, and encourage more people to use it.</p>
@@ -12,10 +14,18 @@
 	<p class="small"><a href="/calendar">Get a reminder before each action, in your own calendar.</a> No email.</p>
 </section>
 
+<section id="words" class="keybox">
+	<h2>Your six words</h2>
+	<p>No email. No account. Your device makes six random words. They are your key, and we never see them. Make them once here, then every action below is one button.</p>
+	<Words />
+</section>
+</div>
+
 <nav class="chips" aria-label="Jump to a company">
 	{#each data.groups as g}<a href="#{g.id}">{g.name}</a>{/each}
 </nav>
 
+<div class="groups">
 {#each data.groups as g}
 	<section id={g.id} class="group">
 		<h2>{g.name}</h2>
@@ -36,3 +46,4 @@
 		{/each}
 	</section>
 {/each}
+</div>

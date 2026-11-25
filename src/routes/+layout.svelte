@@ -5,6 +5,9 @@
 	import '@fontsource/barlow/latin-600.css';
 	import '../app.css';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
+	import { key, initKey } from '#lib/words.svelte.js';
+	onMount(initKey);
 	let { children, data } = $props();
 
 	function switchTheme() {
@@ -47,6 +50,14 @@
 		<button type="button" class="theme" onclick={switchTheme}><span class="to-bright">Bright</span><span class="to-dark">Dark</span></button>
 	</span>
 </header>
+
+<!-- On every page: do you have your words or not. Read from this device only; nothing is asked of the server. -->
+{#if key.ready}
+	<p class="keybar" role="status">
+		{#if key.words}<b>Your six words are ready</b> ({key.remembered ? 'remembered on this device' : 'in this tab only'}). Every action is one button. <a href="/#words">See them</a>
+		{:else}<b>No words yet.</b> <a href="/#words">Make your six words</a> once, then every action is one button.{/if}
+	</p>
+{/if}
 
 <!-- A new page for every address. Without this, going from one action to the next kept the first action's
      receipt on screen ("You're counted") for an action the person had not joined (Youssef found it, Nov 20, 2026). -->

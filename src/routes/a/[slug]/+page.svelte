@@ -4,7 +4,9 @@
 	import { COUNTRIES, COUNTRY_NAME } from '#lib/countries.js';
 	import { cleanCity, cleanPostal } from '#lib/area.js';
 	import { GUIDES } from '#lib/guides.js';
-	import { loadWords, saveWords, forgetMe, loadMine, markMine, loadPending, addPending } from '#lib/device.js';
+	import { loadMine, markMine, loadPending, addPending } from '#lib/device.js';
+	import { key, initKey } from '#lib/words.svelte.js';
+	import Words from '#lib/Words.svelte';
 	let { data } = $props();
 
 	const a = $derived(data.action);
@@ -15,12 +17,7 @@
 	const verb = $derived(isStep ? 'I did it' : "I'm in");
 	const isAmazonDelete = $derived(a.slug === 'amazon-delete-2026');
 
-	// The flow: choose (new or returning) → words → where (optional) → send.
-	let mode = $state(null); // 'new' | 'back'
-	let words = $state([]); // the six words, kept only in this page's memory
-	let wroteDown = $state(false);
-	let typed = $state('');
-	let typedError = $state('');
+	// The six words come from the shared key (made on the front page, or here if there are none yet).
 	let country = $state('');
 	let city = $state('');
 	let postalCode = $state('');
@@ -30,36 +27,24 @@
 	let step = $state('');
 	let result = $state(null);
 	let sent = $state(null);
-	let copied = $state(false);
-	// Kept on this device only, never sent: the words (if the person wants) and their own record.
-	let saved = $state(null); // the remembered words, or null
-	// Off unless the person ticks it (SPEC): the words are the key, so keeping them is their choice.
-	let remember = $state(false);
-	let askForget = $state(false);
 	let inApp = $state(false); // opened inside Instagram's or Facebook's own browser
 	let areaError = $state('');
-	let showSaved = $state(false);
 	let mine = $state({});
 	let pending = $state({});
 	let mounted = $state(false);
 
 	onMount(() => {
-		saved = loadWords();
+		initKey();
 		mine = loadMine();
 		pending = loadPending();
 		mounted = true;
-		if (saved) mode = 'saved';
 		inApp = /Instagram|FBAN|FBAV|FB_IAB/.test(navigator.userAgent);
 	});
 
-	function forget() {
-		forgetMe();
-		saved = null;
+	// The words were forgotten in the box: drop this page's own record too.
+	function forgotten() {
 		mine = {};
 		pending = {};
-		showSaved = false;
-		askForget = false;
-		mode = null;
 	}
 
 	const myKey = (round) => `${a.slug}|${round ?? ''}`;
@@ -80,41 +65,13 @@
 	const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	const batchText = $derived(data.batchSeconds % 60 === 0 ? (data.batchSeconds === 300 ? 'five minutes' : `${data.batchSeconds / 60} minutes`) : `${data.batchSeconds} seconds`);
 
-	async function newWords() {
-		const [{ makeWords }, { WORDS }] = await Promise.all([import('#lib/ticket.js'), import('#lib/wordlist.js')]);
-		words = makeWords(WORDS);
-		wroteDown = false;
-		copied = false;
-		mode = 'new';
-	}
-
-	async function copyWords() {
-		try {
-			await navigator.clipboard.writeText(words.join(' '));
-			copied = true;
-		} catch {
-			copied = false;
-		}
-	}
-
-	async function useTyped() {
-		const [{ readWords }, { WORDS }] = await Promise.all([import('#lib/ticket.js'), import('#lib/wordlist.js')]);
-		const w = readWords(typed, new Set(WORDS));
-		if (!w) {
-			typedError = 'That is not six words from the list. Check each word, and the spaces between them.';
-			return null;
-		}
-		typedError = '';
-		return w;
-	}
-
 	async function send() {
 		// Strict checks on the two free-text fields, before anything is made or sent.
 		areaError = '';
 		if (country && city.trim() && !cleanCity(city)) areaError = 'The city can only have letters, spaces and hyphens, 2 to 40 characters. Fix it, or leave it empty.';
 		else if (country && postalCode.trim() && !cleanPostal(postalCode)) areaError = 'The postal code can only have letters and numbers, 2 to 10 characters. Fix it, or leave it empty.';
 		if (areaError) return;
-		const w = mode === 'new' ? words : mode === 'saved' ? saved : await useTyped();
+		const w = key.words;
 		if (!w) return;
 		busy = true;
 		result = null;
@@ -123,30 +80,32 @@
 			step = 'Making your ticket on your device…';
 			const ticket = await makeTicket(w, a.slug, r?.key ?? '');
 			step = 'Proving you are not a bot, with a little work on your device…';
-			const puzzle = await (await fetch('/puzzle')).json();
-			const answer = await solvePuzzle(puzzle);
-			const body = { ticket, round: r?.key ?? '', puzzle: { ...puzzle, answer } };
+			const body = { ticket, round: r?.key ?? '' };
 			if (country) {
 				body.country = country;
 				if (city.trim()) body.city = cleanCity(city);
 				if (postalCode.trim()) body.postalCode = cleanPostal(postalCode);
 			}
 			if (isAmazonDelete && (addresses || paymentMethods)) body.sums = { addresses, payment_methods: paymentMethods };
-			step = 'Sending the ticket…';
-			const res = await fetch(`/a/${a.slug}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-			const out = await res.json();
+			// A puzzle made before a server restart is refused once; then a fresh one is fetched and solved.
+			let res, out;
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const puzzle = await (await fetch('/puzzle')).json();
+				body.puzzle = { ...puzzle, answer: await solvePuzzle(puzzle) };
+				step = 'Sending the ticket…';
+				res = await fetch(`/a/${a.slug}/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+				out = await res.json();
+				if (out.status !== 'bad_puzzle') break;
+			}
 			result = res.ok ? out.status : out.status === 'slow_down' ? 'slow_down' : out.status === 'paused' ? 'paused' : 'error';
 			sent = { country: body.country, city: body.city, postalCode: body.postalCode, sums: body.sums };
 			if (res.ok) {
-				if (remember && mode !== 'saved') saved = saveWords(w) ? w : null;
 				const did = data.state === 'today' || data.state === 'open';
 				if (out.status !== 'closed') mine = markMine(myKey(r?.key), isStep ? 'did' : 'in');
 				if ((out.status === 'counted' || out.status === 'did_it') && out.shownAt) {
 					const b = out.status === 'did_it' ? { in: 0, did: 1 } : { in: 1, did: did ? 1 : 0 };
 					pending = addPending(myKey(r?.key), { ...b, until: out.shownAt, at: out.at });
 				}
-				words = [];
-				typed = '';
 			}
 		} catch {
 			result = 'error';
@@ -155,7 +114,7 @@
 		busy = false;
 	}
 
-	const canSend = $derived(mode === 'saved' ? !!saved : mode === 'new' ? words.length === 6 && (wroteDown || remember) : mode === 'back' ? typed.trim().length > 0 : false);
+	const canSend = $derived(!!key.words);
 	const lastDay = $derived(r?.end ?? a.date);
 	const whenLabel = $derived(
 		a.kind === 'step' ? 'A step · any day'
@@ -171,6 +130,8 @@
 
 <svelte:head><title>{a.title} · The Counter</title></svelte:head>
 
+<div class="cols">
+<div class="col">
 <section class="head">
 	<div class="label">{whenLabel}</div>
 	<h1>{a.title}</h1>
@@ -209,6 +170,8 @@
 	</section>
 {/if}
 
+</div>
+<div class="col">
 {#if data.state === 'past'}
 	<p class="closed">This count is closed. It stays here as the result.</p>
 {:else if result && !['error', 'slow_down'].includes(result)}
@@ -216,7 +179,7 @@
 		<h2>{result === 'already' ? "You're already counted." : result === 'closed' ? 'This count just closed.' : isStep ? "You're counted." : "You're in."}</h2>
 		{#if !isStep && result !== 'closed' && result !== 'already'}<p class="comeback"><b>On {niceDate(lastDay)}, do it.</b> That's all. Nothing more to press.</p>{/if}
 		<dl>
-			<dt>Stayed on your device</dt><dd>Your six words{saved ? ', remembered in this browser only' : ''}.</dd>
+			<dt>Stayed on your device</dt><dd>Your six words{key.remembered ? ', remembered in this browser only' : ', in this tab only'}.</dd>
 			<dt>Sent to us</dt><dd>Your ticket{sent?.country ? `. Your area: ${[sent.city, COUNTRY_NAME[sent.country]].filter(Boolean).join(', ')}${sent.postalCode ? ' ' + sent.postalCode : ''}` : ''}{sent?.sums ? '. Your two numbers' : ''}.</dd>
 			<dt>Kept</dt><dd>The ticket, the area if you gave one, and the day. Not the hour.</dd>
 			{#if sent?.sums}<dt>Added to a total, then forgotten</dt><dd>{sent.sums.addresses} addresses, {sent.sums.payment_methods} payment methods.</dd>{/if}
@@ -236,61 +199,14 @@
 	<section class="join">
 		<h2>Count me</h2>
 		{#if data.paused}<p class="closed" role="status"><b>Counting is paused for a moment.</b> Too many tickets came in at once, or I switched it off to look at something. The numbers stay. Try again in a little while.</p>{/if}
-		<p>No email. No account. Your device makes six random words. They are your key, and we never see them. From the words, your device makes a ticket: a long code that says nothing about you. Only the ticket is sent.{#if a.repeat === 'weekly'}{' '}Every week gets a new ticket.{/if}</p>
 		{#if inApp}<p class="saved"><b>You opened this inside Instagram or Facebook.</b> Their built-in browser belongs to Meta. For more privacy, open nolistofwho.org in your own browser: tap the three dots, then "Open in browser".</p>{/if}
-		<noscript><p class="closed">Making the ticket needs JavaScript, because it happens on your device and not on our server.</p></noscript>
-
-		{#if mode === 'saved'}
-			<p class="saved"><b>Your words are on this device.</b> Just press the button.</p>
-			<div class="row2">
-				<button type="button" class="ghost small-btn" onclick={() => (showSaved = !showSaved)}>{showSaved ? 'Hide my words' : 'Show my words'}</button>
-				<button type="button" class="ghost small-btn" onclick={() => (mode = 'back')}>Use other words</button>
-			</div>
-			{#if showSaved}
-				<ol class="words" aria-label="Your six words">{#each saved as w}<li>{w}</li>{/each}</ol>
-				<p class="muted small">Write them down to use them on another phone or computer.</p>
-			{/if}
+		{#if !key.words}
+			<p>No email. No account. First, your six words: your device makes them, they are your key, and we never see them. You make them once and use them for every action.{#if a.repeat === 'weekly'}{' '}Every week gets a new ticket from the same words.{/if}</p>
 		{/if}
+		<!-- With words already made, this page is only the question and the button; the bar on top says the words are ready. -->
+		{#if !key.words || again}<Words onforget={forgotten} />{/if}
 
-		{#if !mode}
-			<div class="choice">
-				<button type="button" class="go" onclick={newWords}>I'm new: make my words</button>
-				<button type="button" class="ghost" onclick={() => (mode = 'back')}>I have my words</button>
-			</div>
-		{/if}
-
-		{#if mode === 'new'}
-			<div class="label2">Your six words</div>
-			<ol class="words" aria-label="Your six words">
-				{#each words as w}<li>{w}</li>{/each}
-			</ol>
-			<p><b>Write them on paper, or take a photo.</b> They are the only way back: to join next week, or the next action. Nobody, not even us, can give them to you again. Lose them, and you simply count as someone new.</p>
-			<p class="muted small">Paper is safest. A photo that your phone backs up to Google or Apple puts the words in their cloud. The words don't say who you are, but still.</p>
-			<div class="row2">
-				<button type="button" class="ghost small-btn" onclick={copyWords}>{copied ? 'Copied' : 'Copy the words'}</button>
-				<button type="button" class="ghost small-btn" onclick={newWords}>Other words</button>
-			</div>
-			<div class="check">
-				<input id="wrote" type="checkbox" bind:checked={wroteDown} />
-				<label class="plain" for="wrote">I wrote them down, or I'm fine counting just once.</label>
-			</div>
-		{/if}
-
-		{#if mode === 'new' || mode === 'back'}
-			<div class="check">
-				<input id="remember" type="checkbox" bind:checked={remember} />
-				<label class="plain" for="remember">Remember my words on this device, so next time it's one button. They stay on this device and are never sent.</label>
-			</div>
-		{/if}
-
-		{#if mode === 'back'}
-			<label for="typed">Your six words</label>
-			<textarea id="typed" rows="2" autocomplete="off" autocapitalize="off" spellcheck="false" bind:value={typed} placeholder="six words, in order"></textarea>
-			{#if typedError}<p class="closed" role="alert">{typedError}</p>{/if}
-			<button type="button" class="linkish" onclick={newWords}>I lost them: make new words</button>
-		{/if}
-
-		{#if mode}
+		{#if key.words}
 			<div class="label2">Where, if you want</div>
 			<p class="muted small"><b>Only the country is shown, and only when 10 or more people share it.</b> A city and postal code are kept but not shown for now. Leave it all empty if you prefer.</p>
 			<div>
@@ -338,6 +254,10 @@
 	</section>
 {/if}
 
+</div>
+</div>
+
+<div class="below">
 {#if data.history.length}
 	<section class="history">
 		<h2>Every {weekday(a.date)} so far</h2>
@@ -356,22 +276,12 @@
 	</section>
 {/if}
 
-{#if myRounds.length || saved}
+{#if myRounds.length}
 	<section class="mine">
 		<h2>Your record, on this device only</h2>
-		{#if myRounds.length}
 			<p>{#if a.repeat === 'weekly'}You were in for <b>{myCount}</b> {weekday(a.date)}{myCount === 1 ? '' : 's'}{r && mine[myKey(r.key)] ? `, including ${niceDate(r.start)}` : ''}.{:else}{isStep ? 'You did it.' : "You're in."}{/if}</p>
-		{/if}
 		<p class="muted small">This record and your words live in this browser only. I keep no history of anyone; each round's ticket is unrelated to the last. Anyone who opens this browser can see them.</p>
-		{#if askForget}
-			<p class="closed" role="alert"><b>This removes your six words and your record from this device.</b> If you did not write the words down, you count as someone new next time.</p>
-			<div class="row2">
-				<button type="button" class="ghost small-btn" onclick={forget}>Yes, forget me</button>
-				<button type="button" class="ghost small-btn" onclick={() => (askForget = false)}>Keep them</button>
-			</div>
-		{:else}
-			<p><button type="button" class="ghost small-btn" onclick={() => (askForget = true)}>Forget me on this device</button></p>
-		{/if}
+		<p class="muted small">To remove it: <a href="/#words">forget me on this device</a>.</p>
 	</section>
 {/if}
 
@@ -392,3 +302,4 @@
 	<h2>What this number is</h2>
 	<p>It counts tickets, not checked people. Like a petition, one person could make more than one. We make that slow, and we remove clear abuse and say how many: {#if data.removed > 0}<b>{n(data.removed)} fake entries removed so far.</b>{:else}none removed so far.{/if} To check who someone is, we would need a list of who. We won't keep one.</p>
 </section>
+</div>

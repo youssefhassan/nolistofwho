@@ -1,5 +1,7 @@
 // The counter's whole memory. Read SPEC.md first.
-// What is kept per entry: the ticket, the area if given, the day. Nothing else. No time of day, no IP address.
+// What is kept per entry: the ticket, the country if given, the day. Nothing else. No time of day, no IP address.
+// City and postal code (optional) are kept apart, in `places`, as counts with no ticket and no day next to them
+// (Youssef, Nov 24: "optional, not necessarily related to a ticket").
 
 import { cleanCountry, cleanCity, cleanPostal } from '../area.js';
 
@@ -30,11 +32,19 @@ CREATE TABLE IF NOT EXISTS entries (
   round TEXT NOT NULL DEFAULT '',
   ticket TEXT NOT NULL,
   country TEXT,
-  city TEXT,
-  postal_code TEXT,
   day TEXT NOT NULL,              -- rounded to the day, on purpose
   did_it INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (action_slug, round, ticket)
+) WITHOUT ROWID;
+-- Places, as counts only: no ticket, no day. Nobody can tell which entry gave which city or postal code.
+CREATE TABLE IF NOT EXISTS places (
+  action_slug TEXT NOT NULL,
+  round TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL,
+  city TEXT NOT NULL DEFAULT '',
+  postal_code TEXT NOT NULL DEFAULT '',
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (action_slug, round, country, city, postal_code)
 ) WITHOUT ROWID;
 -- Sums, not lists: a person's numbers are added here and never kept next to the ticket.
 CREATE TABLE IF NOT EXISTS totals (
@@ -199,8 +209,9 @@ export function createCounter(db, opts = {}) {
 		action: db.prepare('SELECT * FROM actions WHERE slug = ?'),
 		actions: db.prepare('SELECT * FROM actions ORDER BY sort'),
 		entry: db.prepare('SELECT did_it FROM entries WHERE action_slug = ? AND round = ? AND ticket = ?'),
-		insert: db.prepare('INSERT INTO entries (action_slug, round, ticket, country, city, postal_code, day, did_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
-		areas: db.prepare('SELECT action_slug, round, country, city, COUNT(*) AS n FROM entries GROUP BY action_slug, round, country, city'),
+		insert: db.prepare('INSERT INTO entries (action_slug, round, ticket, country, day, did_it) VALUES (?, ?, ?, ?, ?, ?)'),
+		addPlace: db.prepare('INSERT INTO places (action_slug, round, country, city, postal_code, n) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT DO UPDATE SET n = n + 1'),
+		areas: db.prepare('SELECT action_slug, round, country, COUNT(*) AS n FROM entries GROUP BY action_slug, round, country'),
 		addRemoval: db.prepare('INSERT INTO removals (action_slug, count) VALUES (?, ?) ON CONFLICT(action_slug) DO UPDATE SET count = count + excluded.count'),
 		markDid: db.prepare('UPDATE entries SET did_it = 1 WHERE action_slug = ? AND round = ? AND ticket = ?'),
 		counts: db.prepare('SELECT action_slug, round, COUNT(*) AS n, SUM(did_it) AS did FROM entries GROUP BY action_slug, round'),
@@ -321,7 +332,11 @@ export function createCounter(db, opts = {}) {
 			return 'already';
 		}
 		const country = cleanCountry(extra.country);
-		q.insert.run(slug, roundKey, ticket, country, country ? cleanCity(extra.city) : null, country ? cleanPostal(extra.postalCode) : null, today, did);
+		q.insert.run(slug, roundKey, ticket, country, today, did);
+		// City and postal code go into a separate count, never next to the ticket.
+		const city = country ? cleanCity(extra.city) : null;
+		const postal = country ? cleanPostal(extra.postalCode) : null;
+		if (city || postal) q.addPlace.run(slug, roundKey, country, city ?? '', postal ?? '');
 		// Sums are added on the first join only, capped, and never stored with the ticket.
 		for (const [name, value] of Object.entries(extra.sums ?? {})) {
 			if (!SUM_NAMES.includes(name)) continue;
@@ -345,7 +360,7 @@ export function createCounter(db, opts = {}) {
 		if (!areaSnapshot || areaDay !== today || areaGen !== gen || batchMs === 0) {
 			const by = {};
 			// Only countries are shown for now (Youssef, Nov 18): a city is free text, and ten fake tickets could
-			// put any words on the page. Cities stay stored, and show again once names are reviewed.
+			// put any words on the page. Cities are counted apart, in `places`, and not shown.
 			for (const r of q.areas.all()) (by[r.round ? `${r.action_slug}@${r.round}` : r.action_slug] ??= []).push({ country: cleanCountry(r.country), city: null, n: Number(r.n) });
 			areaSnapshot = Object.fromEntries(Object.entries(by).map(([k, rows]) => [k, rollUp(rows)]));
 			areaDay = today;
@@ -355,14 +370,14 @@ export function createCounter(db, opts = {}) {
 	}
 
 	/**
-	 * Remove entries that are clearly abuse, by day and, if given, country and city.
+	 * Remove entries that are clearly abuse, by day and, if given, country.
 	 * Returns how many were removed; the public removal count goes up by that much.
+	 * Places are not touched: they have no day, so they can't be matched to the removed entries.
 	 */
-	function remove(slug, { day, country, city } = {}) {
+	function remove(slug, { day, country } = {}) {
 		let sql = 'DELETE FROM entries WHERE action_slug = ? AND day = ?';
 		const args = [slug, day];
 		if (country) { sql += ' AND country = ?'; args.push(country); }
-		if (city) { sql += ' AND city = ?'; args.push(city); }
 		const n = Number(db.prepare(sql).run(...args).changes);
 		if (n > 0) q.addRemoval.run(slug, n);
 		snapshot = null;
@@ -396,6 +411,30 @@ function migrate(db) {
 				  SELECT action_slug, '', ticket, country, city, postal_code, day, did_it FROM entries_old;
 				DROP TABLE entries_old;
 				COMMIT;`);
+		}
+		// Nov 24: city and postal code leave the entries. They move into `places` as counts, and the entries
+		// are rebuilt without them. VACUUM then rewrites the file, so the old rows are not left in free space.
+		const e2 = cols('entries');
+		if (e2.includes('city') || e2.includes('postal_code')) {
+			const city = e2.includes('city') ? 'city' : 'NULL';
+			const postal = e2.includes('postal_code') ? 'postal_code' : 'NULL';
+			db.exec(`BEGIN;
+				CREATE TABLE IF NOT EXISTS places (action_slug TEXT NOT NULL, round TEXT NOT NULL DEFAULT '', country TEXT NOT NULL,
+				  city TEXT NOT NULL DEFAULT '', postal_code TEXT NOT NULL DEFAULT '', n INTEGER NOT NULL DEFAULT 0,
+				  PRIMARY KEY (action_slug, round, country, city, postal_code)) WITHOUT ROWID;
+				INSERT INTO places (action_slug, round, country, city, postal_code, n)
+				  SELECT action_slug, round, country, COALESCE(${city}, ''), COALESCE(${postal}, ''), COUNT(*) FROM entries
+				  WHERE country IS NOT NULL AND (${city} IS NOT NULL OR ${postal} IS NOT NULL)
+				  GROUP BY action_slug, round, country, COALESCE(${city}, ''), COALESCE(${postal}, '')
+				  ON CONFLICT DO UPDATE SET n = n + excluded.n;
+				ALTER TABLE entries RENAME TO entries_old;
+				CREATE TABLE entries (action_slug TEXT NOT NULL, round TEXT NOT NULL DEFAULT '', ticket TEXT NOT NULL, country TEXT,
+				  day TEXT NOT NULL, did_it INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (action_slug, round, ticket)) WITHOUT ROWID;
+				INSERT INTO entries (action_slug, round, ticket, country, day, did_it)
+				  SELECT action_slug, round, ticket, country, day, did_it FROM entries_old;
+				DROP TABLE entries_old;
+				COMMIT;`);
+			db.exec('VACUUM');
 		}
 	}
 }

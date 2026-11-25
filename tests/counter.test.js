@@ -391,3 +391,48 @@ test('the pause switch: by hand with a file, and by itself in a flood', async ()
 	}
 	assert.equal(p.paused(), false);
 });
+
+// ---- Added Nov 24 after the code review ----
+
+test('city and postal code are never stored next to a ticket, only as counts', () => {
+	const db = new DatabaseSync(':memory:');
+	const c = createCounter(db, { batchSeconds: 0 });
+	c.join('x-leave', T1, { today: '2026-11-20', country: 'DE', city: 'Berlin', postalCode: '10437' });
+	c.join('x-leave', T2, { today: '2026-11-20', country: 'DE', city: 'Berlin', postalCode: '10437' });
+	const cols = db.prepare('PRAGMA table_info(entries)').all().map((r) => r.name);
+	assert.deepEqual(cols.sort(), ['action_slug', 'country', 'day', 'did_it', 'round', 'ticket']);
+	const placeCols = db.prepare('PRAGMA table_info(places)').all().map((r) => r.name);
+	assert.ok(!placeCols.includes('ticket') && !placeCols.includes('day'));
+	assert.deepEqual({ ...db.prepare('SELECT country, city, postal_code, n FROM places').get() }, { country: 'DE', city: 'Berlin', postal_code: '10437', n: 2 });
+	// A second press of the same ticket adds nothing to places.
+	c.join('x-leave', T1, { today: '2026-11-20', country: 'DE', city: 'Berlin', postalCode: '10437' });
+	assert.equal(db.prepare('SELECT n FROM places').get().n, 2);
+});
+
+test('an older file: city and postal code move out of the entries into counts', () => {
+	const db = new DatabaseSync(':memory:');
+	db.exec(`CREATE TABLE entries (action_slug TEXT NOT NULL, round TEXT NOT NULL DEFAULT '', ticket TEXT NOT NULL, country TEXT, city TEXT,
+		postal_code TEXT, day TEXT NOT NULL, did_it INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (action_slug, round, ticket)) WITHOUT ROWID;
+		INSERT INTO entries VALUES ('x-leave', '', '${T1}', 'DE', 'Berlin', '10437', '2026-11-17', 0);
+		INSERT INTO entries VALUES ('x-leave', '', '${T2}', 'DE', 'Berlin', '10437', '2026-11-18', 0);
+		INSERT INTO entries VALUES ('x-leave', '', '${'c'.repeat(64)}', 'EG', NULL, NULL, '2026-11-18', 0);`);
+	const c = createCounter(db, { batchSeconds: 0 });
+	const cols = db.prepare('PRAGMA table_info(entries)').all().map((r) => r.name);
+	assert.ok(!cols.includes('city') && !cols.includes('postal_code'));
+	assert.deepEqual(c.numbers().counts['x-leave'], { in: 3, did: 0 });
+	assert.deepEqual(db.prepare('SELECT country, city, postal_code, n FROM places').all().map((r) => ({ ...r })), [{ country: 'DE', city: 'Berlin', postal_code: '10437', n: 2 }]);
+	assert.equal(c.join('x-leave', T1, { today: '2026-11-20' }), 'already');
+});
+
+test('the pause also goes on for a slow flood: too many in one hour', async () => {
+	const { createPause } = await import('../src/lib/server/pause.js');
+	let t = 3_600_000 * 1000;
+	const p = createPause({ perMinute: 100, perHour: 50, holdMinutes: 15, now: () => t });
+	for (let m = 0; m < 10; m++) {
+		for (let i = 0; i < 5; i++) p.counted();
+		t += 60_000;
+	}
+	assert.equal(p.paused(), false); // 50 in the hour, at the limit
+	p.counted();
+	assert.equal(p.paused(), 'flood');
+});

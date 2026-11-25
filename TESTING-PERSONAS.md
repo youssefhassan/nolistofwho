@@ -1,5 +1,10 @@
 # Three personas, tested (Nov 18, 2026)
 
+**Nov 24: the personas run as tests every time**, in `tests/personas.test.js` (21 tests; 60 in all with `tests/counter.test.js`). Most talk to the real built server over HTTP on a throwaway database, so run `npm run build` first; without a build those are skipped. They cover:
+- **Not tech savvy:** messy typed words; typos caught; the strike from Sydney to Honolulu; Tuesdays as separate rounds; "Forget me", private windows.
+- **Privacy nerd:** CSP and the other headers on every page; no cookie; nothing loaded from another host; no IP in any data file; the server logs nothing but its start; no city next to a ticket; rows in ticket order; tickets across actions share nothing.
+- **Hater:** junk tickets, unknown actions, path tricks; a forged, stretched, reused or skipped puzzle; inflated sums; attacker city text; rate limit and automatic pause; the PAUSE file; a staging server refusing the live database.
+
 Before sharing nolistofwho.org on Instagram (Youssef, Nov 18). Live site for reading and the normal flow; local copies for the strike day (pretend Nov 27, port 4321), December (pretend Dec 15, port 4322) and every attack (throwaway databases). No attack ever touched the live database.
 
 ## 1. Not tech savvy: "I want to delete my Amazon and say I'm in"

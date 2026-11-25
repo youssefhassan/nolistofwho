@@ -83,6 +83,7 @@ A public number: how many people did a thing against big tech, together, on a da
 - The ticket: Argon2id in the browser (hash-wasm), email and word never sent.
 - Two numbers: in, did it. States: upcoming, today, past.
 - Place: country + postal code, optional, 10-or-more and remainder rules, shown as a list of areas.
+- Changed Nov 24 (Youssef: "optional, not necessarily related to a ticket"): only the country sits next to the ticket. City and postal code are counted apart in `places`, with no ticket and no day. Pause also on more than 3,000 new tickets in an hour (`COUNTER_PAUSE_PER_HOUR`). `secure_delete` on.
 - The sums for the Amazon action.
 - The receipt. The share image (both sizes). The next action and the calendar feed.
 - "Remember on this device" tick box.
@@ -165,3 +166,5 @@ A public number: how many people did a thing against big tech, together, on a da
 4. **Node on his Mac:** his yes to install it.
 5. **Weekly tickets:** one ticket per week (proposed: a leak shows one week, history kept on the device) or one ticket for all weeks (history on the server, but the record links a person's weeks). His call.
 6. **Which weekly actions:** does "Sundays off X" replace the separate Dec 13 and Jan 3 actions? Instagram-free Tuesdays: from which Tuesday, and until when?
+
+**Changed Nov 25, 2026 (Youssef; on the test copy, not live until his yes):** the six words are made once, in one box at the top of the front page (`src/lib/Words.svelte`, state in `src/lib/words.svelte.js`), not inside every action. A bar on every page says whether this device has words. An action page shows the words box only when there are none yet (people arrive there straight from a post); with words it is the question and one button. Words not ticked "remember" are held in the tab's memory only and are gone when it closes. Wide screens (900px and up): the front page is a directory in columns, like Yahoo in 1996; an action page has two columns.
