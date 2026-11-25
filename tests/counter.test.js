@@ -216,19 +216,20 @@ import { currentRound, pastRounds, roundState } from '../src/lib/server/counter.
 const tuesdays = { slug: 't', kind: 'day', repeat: 'weekly', date: '2026-12-01', days: 1 };
 const at = (iso) => new Date(iso);
 
-test('weekly: one round open at a time, the next one right after the grace', () => {
+test('weekly: one round open at a time, the next one as soon as the day has ended everywhere', () => {
 	assert.equal(currentRound(tuesdays, at('2026-11-20T12:00:00Z')).start, '2026-12-01');
 	assert.equal(roundState(currentRound(tuesdays, at('2026-11-20T12:00:00Z')), at('2026-11-20T12:00:00Z')), 'upcoming');
 	assert.equal(stateOf(tuesdays, at('2026-12-01T09:00:00Z')), 'today');
-	assert.equal(currentRound(tuesdays, at('2026-12-03T11:59:00Z')).start, '2026-12-01'); // "I did it yesterday", at UTC-12
-	assert.equal(currentRound(tuesdays, at('2026-12-03T12:00:00Z')).start, '2026-12-08'); // now "I'm in" for the next Tuesday
-	assert.equal(stateOf(tuesdays, at('2026-12-03T12:00:00Z')), 'upcoming');
+	assert.equal(currentRound(tuesdays, at('2026-12-02T11:59:00Z')).start, '2026-12-01'); // still Tuesday at UTC-12
+	assert.equal(currentRound(tuesdays, at('2026-12-02T12:00:00Z')).start, '2026-12-08'); // Tuesday is over everywhere: "I'm in" for the next one
+	assert.equal(stateOf(tuesdays, at('2026-12-02T12:00:00Z')), 'upcoming');
+	assert.equal(currentRound(tuesdays, at('2026-12-02T19:00:00Z')).start, '2026-12-08'); // Wednesday evening in Berlin never says last Tuesday
 	assert.equal(currentRound(tuesdays, at('2027-06-01T12:00:00Z')).start, '2027-06-01'); // no end: it goes on
 });
 
 test('weekly: it ends with its last round', () => {
 	const sundays = { kind: 'day', repeat: 'weekly', date: '2026-12-13', until: '2027-01-17' };
-	assert.equal(currentRound(sundays, at('2027-01-18T12:00:00Z')).start, '2027-01-17');
+	assert.equal(currentRound(sundays, at('2027-01-18T11:00:00Z')).start, '2027-01-17');
 	assert.equal(currentRound(sundays, at('2027-01-19T12:00:00Z')), null);
 	assert.equal(stateOf(sundays, at('2027-01-19T12:00:00Z')), 'past');
 	assert.deepEqual(pastRounds(sundays, at('2027-02-01T12:00:00Z')), ['2027-01-17', '2027-01-10', '2027-01-03', '2026-12-27', '2026-12-20', '2026-12-13']);

@@ -14,7 +14,8 @@
 	const r = $derived(data.round);
 	// One button (Youssef, Nov 21, 2026: two buttons confused people and the build). A dated action is "I'm in"; a step is a deed, "I did it".
 	const isStep = $derived(a.kind === 'step');
-	const verb = $derived(isStep ? 'I did it' : "I'm in");
+	// A weekly button names its day, so it is clear which Tuesday or Sunday you are in for (Youssef, Nov 25).
+	const verb = $derived(isStep ? 'I did it' : a.repeat === 'weekly' && r ? `I'm in for ${niceDate(r.start)}` : "I'm in");
 	const isAmazonDelete = $derived(a.slug === 'amazon-delete-2026');
 
 	// The six words come from the shared key (made on the front page, or here if there are none yet).
@@ -60,6 +61,8 @@
 		return p && p.until > data.asOf && (p.at ?? 0) > data.takenAt ? p : { in: 0, did: 0 };
 	});
 	const shownIn = $derived(data.in + bump.in);
+	// Weekly: every round counted, added up. One person in for three Sundays is three (his decision, Nov 25).
+	const allRounds = $derived(a.repeat === 'weekly' ? data.history.reduce((sum, h) => sum + h.in, 0) + shownIn : 0);
 	const shownDid = $derived(data.did + bump.did);
 	const youIncluded = $derived(bump.in > 0 || bump.did > 0);
 	const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -118,7 +121,7 @@
 	const lastDay = $derived(r?.end ?? a.date);
 	const whenLabel = $derived(
 		a.kind === 'step' ? 'A step · any day'
-		: a.repeat === 'weekly' ? `Every ${weekday(a.date)}${r ? ' · this round: ' + niceDate(r.start) : ' · ended'}`
+		: a.repeat === 'weekly' ? `Every ${weekday(a.date)}${r ? (data.state === 'upcoming' ? ' · next: ' : ' · now: ') + niceDate(r.start) : ' · ended'}`
 		: r && r.start !== r.end ? `${niceDate(r.start)} to ${niceDate(r.end)}`
 		: niceDate(a.date)
 	);
@@ -136,7 +139,7 @@
 	<div class="label">{whenLabel}</div>
 	<h1>{a.title}</h1>
 	<p class="ask">{a.ask}</p>
-	{#if a.kind === 'day' && data.state !== 'past'}<p class="muted small">Press "I'm in", then do it on your own {weekday(lastDay)}, wherever you live. One press, nothing more.{#if a.repeat === 'weekly'}{' '}Every {weekday(a.date)} is counted on its own.{/if}</p>{/if}
+	{#if a.kind === 'day' && data.state !== 'past'}<p class="muted small">{#if a.repeat === 'weekly' && r}Press the button to say you are in for <b>{niceDate(r.start)}</b>, then do it on your own {weekday(lastDay)}, wherever you live. Every {weekday(a.date)} is counted on its own, so come back for the next one.{:else}Press "I'm in", then do it on your own {weekday(lastDay)}, wherever you live. One press, nothing more.{/if}</p>{/if}
 		{#if a.calledBy}<p class="muted">Called by <a href={a.calledByUrl} rel="noreferrer">{a.calledBy}</a>. We count it here, with no list of who.</p>{/if}
 	{#if howTo}
 		<details class="howto">
@@ -261,6 +264,7 @@
 {#if data.history.length}
 	<section class="history">
 		<h2>Every {weekday(a.date)} so far</h2>
+		<p><b>{n(allRounds)}</b> {weekday(a.date)}s in all, every round added up{r ? `, with ${niceDate(r.start)}` : ''}. Someone who is in for three {weekday(a.date)}s counts three times: each week has its own ticket, so we cannot tell, and do not want to.</p>
 		<table>
 			<thead><tr><th scope="col">Round</th><th scope="col">In</th>{#if myRounds.length}<th scope="col"><span class="sr">You</span></th>{/if}</tr></thead>
 			<tbody>

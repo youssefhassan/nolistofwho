@@ -36,7 +36,7 @@
 			<a class="row" href="/a/{a.slug}">
 				<span>
 					<span class="when" class:dated={a.kind === 'day'}>
-						{#if a.kind === 'step'}A step · any day{:else if a.repeat === 'weekly'}Every {weekday(a.date)}{#if a.state === 'past'}{' '}· ended{:else}{' '}· {a.state === 'today' ? 'today' : 'next'}: {niceDate(a.date)}{/if}{:else}{niceDate(a.date)}{#if a.state === 'past'}{' '}· closed{/if}{/if}
+						{#if a.kind === 'step'}A step · any day{:else if a.repeat === 'weekly'}Every {weekday(a.date)}{#if a.state === 'past'}{' '}· ended{:else}{' '}· {a.state === 'upcoming' ? 'next' : 'now'}: {niceDate(a.date)}{/if}{:else}{niceDate(a.date)}{#if a.state === 'past'}{' '}· closed{/if}{/if}
 					</span>
 					<span class="title">{a.title}</span>
 					{#if a.calledBy}<span class="muted small">Called by {a.calledBy}</span>{/if}

@@ -124,6 +124,7 @@ function round(start, days) {
  * The round that is open now, or the next one; null when the action is over.
  * An action that happens once has one round, with the key ''. A weekly action has a round every 7 days,
  * keyed by its start day; only one round is open at a time, so "I'm in" is always for the next one.
+ * An action that happens once keeps its day after ("I did it yesterday"); a weekly round does not.
  * @param {Date | string} now
  */
 export function currentRound(action, now = new Date()) {
@@ -134,13 +135,15 @@ export function currentRound(action, now = new Date()) {
 		return t < aoe(addDays(r.end, 1)).closes ? r : null;
 	}
 	const first = Date.parse(action.date + 'T00:00:00Z');
-	// Jump close to now, then step: the round stays open until the day after its end has ended everywhere.
+	// Jump close to now, then step. A weekly round closes when its last day has ended everywhere on Earth,
+	// with no day after (Youssef, Nov 25: a page saying "Tuesday" on Wednesday evening confused people, and
+	// nobody could say "I'm in" for the next one). So the open round is always the next day you can still do.
 	let k = Math.max(0, Math.floor((t - first) / (7 * 24 * HOUR)) - 1);
 	for (;;) {
 		const start = addDays(action.date, 7 * k);
 		if (action.until && start > action.until) return null;
 		const r = { ...round(start, action.days), key: start };
-		if (t < aoe(addDays(r.end, 1)).closes) return r;
+		if (t < aoe(r.end).closes) return r;
 		k++;
 	}
 }
